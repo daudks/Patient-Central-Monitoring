@@ -1,0 +1,485 @@
+{% extends 'base.html' %} {% block title %}Dashboard - Medical Device Data{%
+endblock %} {% block content %}
+<!-- Export & Filter Forms -->
+<form method="get" action="/export_excel" class="mb-3">
+  <input
+    type="hidden"
+    name="patient_id"
+    value="{{ request.args.get('patient_id', '') }}"
+  />
+  <input
+    type="hidden"
+    name="start_date"
+    value="{{ request.args.get('start_date', '') }}"
+  />
+  <input
+    type="hidden"
+    name="end_date"
+    value="{{ request.args.get('end_date', '') }}"
+  />
+  <button type="submit" class="btn btn-success">Export to Excel</button>
+</form>
+
+<form method="get" class="row g-3 mb-4">
+  <div class="col-md-3">
+    <input
+      type="text"
+      name="patient_id"
+      class="form-control"
+      placeholder="Filter by Patient ID"
+      value="{{ request.args.get('patient_id', '') }}"
+    />
+  </div>
+  <div class="col-md-3">
+    <input
+      type="date"
+      name="start_date"
+      class="form-control"
+      placeholder="Start Date"
+      value="{{ request.args.get('start_date', '') }}"
+    />
+  </div>
+  <div class="col-md-3">
+    <input
+      type="date"
+      name="end_date"
+      class="form-control"
+      placeholder="End Date"
+      value="{{ request.args.get('end_date', '') }}"
+    />
+  </div>
+  <div class="col-md-3">
+    <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+  </div>
+</form>
+
+<!-- Latest Vitals Table -->
+<h2>Latest Vitals</h2>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Patient ID</th>
+      <th>Heart Rate</th>
+      <th>SpO2</th>
+      <th>Temperature (°C)</th>
+      <th>Respiratory Rate</th>
+      <th>Timestamp</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vitals %}
+    <tr>
+      <td>{{ v.patient_id }}</td>
+      <td>{{ v.heart_rate }}</td>
+      <td>{{ v.spo2 }}</td>
+      <td>{{ v.temperature }}</td>
+      <td>{{ v.respiratory_rate }}</td>
+      <td>{{ v.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="6" class="text-center">No vitals data available.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Latest Ventilator Table -->
+<h2 class="mt-5">Latest Ventilator Data</h2>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Patient ID</th>
+      <th>Oxygen Level (%)</th>
+      <th>PEEP</th>
+      <th>Tidal Volume</th>
+      <th>Timestamp</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in ventilator %}
+    <tr>
+      <td>{{ v.patient_id }}</td>
+      <td>{{ v.oxygen_level }}</td>
+      <td>{{ v.peep }}</td>
+      <td>{{ v.tidal_volume }}</td>
+      <td>{{ v.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5" class="text-center">No ventilator data available.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Patient Selector -->
+<div class="mb-3">
+  <label for="patientSelector" class="form-label">Select Patient</label>
+  <select id="patientSelector" class="form-select w-auto">
+    <option value="1">Patient 1</option>
+    <option value="2">Patient 2</option>
+    <!-- Add more options dynamically if needed -->
+  </select>
+</div>
+
+<!-- Real-Time Patient Vitals Summary Cards -->
+<section class="container mt-5">
+  <h3 class="text-primary mb-3">Real-Time Patient Vitals</h3>
+  <div class="row" id="vitals-container">
+    <div class="col-md-3">
+      <div class="card text-white bg-info mb-3">
+        <div class="card-header">Heart Rate</div>
+        <div class="card-body">
+          <h5 class="card-title" id="heartRate">-- bpm</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-danger mb-3">
+        <div class="card-header">Blood Pressure</div>
+        <div class="card-body">
+          <h5 class="card-title" id="bloodPressure">-- / -- mmHg</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-success mb-3">
+        <div class="card-header">Temperature</div>
+        <div class="card-body">
+          <h5 class="card-title" id="temperature">-- °C</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-warning mb-3">
+        <div class="card-header">SpO2</div>
+        <div class="card-body">
+          <h5 class="card-title" id="spo2">-- %</h5>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Real-Time Vitals Charts -->
+<section class="container mt-5">
+  <h3 class="text-primary mb-3">Real-Time Vitals Trends</h3>
+  <div class="row">
+    <div class="col-md-4 mb-4">
+      <h5>Heart Rate</h5>
+      <canvas id="heartRateChart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>SpO₂</h5>
+      <canvas id="spo2Chart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>Temperature</h5>
+      <canvas id="tempChart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>Respiratory Rate</h5>
+      <canvas id="respChart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>Systolic Blood Pressure</h5>
+      <canvas id="bpChart" height="150"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- Historical Vitals & Ventilator Charts -->
+<section class="container mt-5">
+  <h3 class="text-primary mb-3">Historical Vitals Trends</h3>
+  <canvas id="vitalsChart" height="200"></canvas>
+
+  <h3 class="text-primary mt-5 mb-3">Ventilator Data Trends</h3>
+  <canvas id="ventilatorChart" height="200"></canvas>
+
+  <div class="row mt-4">
+    <div class="col-md-4 mb-4">
+      <h5>Oxygen Level</h5>
+      <canvas id="oxygenChart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>PEEP</h5>
+      <canvas id="peepChart" height="150"></canvas>
+    </div>
+    <div class="col-md-4 mb-4">
+      <h5>Tidal Volume</h5>
+      <canvas id="tidalVolumeChart" height="150"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- Load required scripts -->
+<script
+  src="https://cdn.socket.io/4.7.4/socket.io.min.js"
+  integrity="sha384-1VwrhW7DzEQD8cNobdCgVf4Z1sydFguOxw6FTh2F0fRxPlP6/x4XAHghnhkmWCSa"
+  crossorigin="anonymous"
+></script>
+<!-- Socket.IO -->
+<script
+  src="https://cdn.socket.io/4.7.4/socket.io.min.js"
+  crossorigin="anonymous"
+></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2"></script>
+
+<script>
+  const heartRateChartCtx = document
+    .getElementById("heartRateChart")
+    .getContext("2d");
+
+  const heartRateChart = new Chart(heartRateChartCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Heart Rate (bpm)",
+          data: [],
+          borderColor: "red",
+          backgroundColor: "rgba(255,0,0,0.1)",
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: {
+        x: {
+          title: { display: true, text: "Time" },
+        },
+        y: {
+          title: { display: true, text: "BPM" },
+          beginAtZero: false,
+          ticks: {
+            // Let Chart.js decide the range dynamically
+            callback: function (value) {
+              return value + " bpm";
+            },
+          },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+        },
+      },
+    },
+  });
+
+  // Update chart function
+  function updateHeartRateChart(value, timestamp) {
+    const maxPoints = 20; // Keep last 20 data points
+    heartRateChart.data.labels.push(timestamp);
+    heartRateChart.data.datasets[0].data.push(value);
+
+    if (heartRateChart.data.labels.length > maxPoints) {
+      heartRateChart.data.labels.shift();
+      heartRateChart.data.datasets[0].data.shift();
+    }
+
+    heartRateChart.update();
+  }
+
+  // Example: Listen to WebSocket or Socket.IO events
+  socket.on("new_vitals", function (data) {
+    const time = data.timestamp;
+    const hr = data.heart_rate;
+    updateHeartRateChart(hr, time);
+
+    // Threshold values (can be adjusted or moved to backend later)
+    const thresholds = {
+      spo2: 92,
+      heart_rate_low: 50,
+      heart_rate_high: 120,
+      temperature_high: 38.0,
+      respiratory_rate_high: 25,
+      blood_pressure_systolic_high: 140,
+    };
+
+    function checkThresholds(data) {
+      let alerts = [];
+
+      if (data.spo2 < thresholds.spo2) alerts.push("Low SPO₂ detected!");
+      if (
+        data.heart_rate < thresholds.heart_rate_low ||
+        data.heart_rate > thresholds.heart_rate_high
+      )
+        alerts.push("Abnormal Heart Rate!");
+      if (data.temperature > thresholds.temperature_high)
+        alerts.push("High Temperature!");
+      if (data.respiratory_rate > thresholds.respiratory_rate_high)
+        alerts.push("High Respiratory Rate!");
+
+      let bpParts = data.blood_pressure.split("/");
+      if (
+        bpParts.length === 2 &&
+        parseInt(bpParts[0]) > thresholds.blood_pressure_systolic_high
+      )
+        alerts.push("High Blood Pressure!");
+
+      return alerts;
+    }
+    // Check alerts
+    const alerts = checkThresholds(data);
+    const alertContainer = document.getElementById("alertContainer");
+    if (alerts.length > 0) {
+      alertContainer.innerHTML = alerts
+        .map((a) => `<div class="alert alert-danger">${a}</div>`)
+        .join("");
+    } else {
+      alertContainer.innerHTML = "";
+    }
+  });
+
+  // Initialize other charts similarly
+  const spo2ChartCtx = document.getElementById("spo2Chart").getContext("2d");
+  const spo2Chart = new Chart(spo2ChartCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "SpO₂ (%)",
+          data: [],
+          borderColor: "blue",
+          backgroundColor: "rgba(0,0,255,0.1)",
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: "Time" } },
+        y: { title: { display: true, text: "SpO₂ (%)" }, beginAtZero: false },
+      },
+      plugins: { legend: { display: true, position: "top" } },
+    },
+  });
+
+  // Function to update SpO₂ chart
+  function updateSpo2Chart(value, timestamp) {
+    const maxPoints = 20;
+    spo2Chart.data.labels.push(timestamp);
+    spo2Chart.data.datasets[0].data.push(value);
+
+    if (spo2Chart.data.labels.length > maxPoints) {
+      spo2Chart.data.labels.shift();
+      spo2Chart.data.datasets[0].data.shift();
+    }
+
+    spo2Chart.update();
+  }
+
+  socket.on("new_vitals", function (data) {
+    updateSpo2Chart(data.spo2, data.timestamp);
+  });
+   const bpChartCtx = document.getElementById("bpChart").getContext("2d");
+  const bpChart = new Chart(bpChartCtx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Systolic (mmHg)",
+          data: [],
+          borderColor: "red",
+          backgroundColor: "rgba(255,0,0,0.1)",
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: "Diastolic (mmHg)",
+          data: [],
+          borderColor: "green",
+          backgroundColor: "rgba(0,255,0,0.1)",
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: "Time" } },
+        y: {
+          title: { display: true, text: "Blood Pressure (mmHg)" },
+          beginAtZero: false,
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+        },
+      },
+    },
+  });
+
+  // Function to update BP chart
+  function updateBpChart(systolic, diastolic, timestamp) {
+    const maxPoints = 20;
+    bpChart.data.labels.push(timestamp);
+    bpChart.data.datasets[0].data.push(systolic);
+    bpChart.data.datasets[1].data.push(diastolic);
+
+    if (bpChart.data.labels.length > maxPoints) {
+      bpChart.data.labels.shift();
+      bpChart.data.datasets[0].data.shift();
+      bpChart.data.datasets[1].data.shift();
+    }
+
+    bpChart.update();
+  }
+
+  // Listen to SocketIO for incoming vitals
+  socket.on("new_vitals", function (data) {
+    updateBpChart(data.bp_systolic, data.bp_diastolic, data.timestamp);
+  });
+</script>
+<script>
+  // Initialize Socket.IO connection
+  const socket = io();
+
+  // Listen for new vitals data
+  socket.on("new_vitals", function (data) {
+    // Update real-time display values
+    document.getElementById("heartRate").textContent = `${data.heart_rate} bpm`;
+    document.getElementById("spo2").textContent = `${data.spo2}%`;
+    document.getElementById(
+      "temperature"
+    ).textContent = `${data.temperature} °C`;
+    document.getElementById(
+      "respiratoryRate"
+    ).textContent = `${data.respiratory_rate} breaths/min`;
+    document.getElementById(
+      "bloodPressure"
+    ).textContent = `${data.blood_pressure} mmHg`;
+
+    // Update charts with new data
+    updateChart(heartRateChart, data.heart_rate, data.timestamp);
+    updateChart(spo2Chart, data.spo2, data.timestamp);
+    updateChart(tempChart, data.temperature, data.timestamp);
+    updateChart(respChart, data.respiratory_rate, data.timestamp);
+
+    const bpValue = data.blood_pressure.includes("/")
+      ? data.blood_pressure.split("/")[0]
+      : parseFloat(data.blood_pressure);
+    updateChart(bpChart, bpValue, data.timestamp);
+  });
+</script>
+
+{% endblock %}
